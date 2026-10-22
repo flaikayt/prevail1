@@ -13,6 +13,7 @@ jobs:
         with:
           gradle-version: current
       - name: Build
+        shell: bash
         run: |
           unzip -q "$(ls *.zip | head -n 1)" -d work
           PROJ="$(dirname "$(find work -name settings.gradle -not -path '*/mdk/*' | head -n 1)")"
@@ -22,7 +23,18 @@ jobs:
           echo "ModDevGradle: $MDG  NeoForge: $NEO"
           sed -i "s/\(id 'net.neoforged.moddev' version '\)[^']*'/\1$MDG'/" build.gradle
           sed -i "s/^neo_version=.*/neo_version=$NEO/" gradle.properties
-          if [ -f gradlew ]; then chmod +x gradlew && ./gradlew build --stacktrace; else gradle build --stacktrace; fi
+          set +e
+          if [ -f gradlew ]; then chmod +x gradlew; ./gradlew build 2>&1 | tee build.log; else gradle build 2>&1 | tee build.log; fi
+          CODE=${PIPESTATUS[0]}
+          if [ "$CODE" != "0" ]; then
+            echo "================ ОШИБКИ ================"
+            grep -A4 "error:" build.log | head -400
+            echo "## Ошибки компиляции" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            grep -A4 "error:" build.log | head -400 >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          exit $CODE
       - uses: actions/upload-artifact@v4
         with:
           name: prevail-jar
